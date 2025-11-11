@@ -47,7 +47,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/chanriver/cf-ip-speedtest.git
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/chanriver/cf-ip-speedtest.git
           git add results/top20.txt
           git commit -m "Update top20.txt (auto speedtest)" || echo "No changes to commit"
           git push
+
