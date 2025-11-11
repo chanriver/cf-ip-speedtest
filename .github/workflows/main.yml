@@ -1,4 +1,4 @@
-name: CF IPv4 Speedtest
+name: CF IPv4 Speedtest with CloudflareSpeedTest
 
 on:
   schedule:
@@ -22,16 +22,28 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Fetch CF IPv4 list
+      - name: Fetch Cloudflare IPv4 list
         run: |
           python get_cloudflare_ips.py
 
-      - name: Run speedtest script
+      - name: Download CloudflareSpeedTest Linux executable
         run: |
-          python speedtest_sample.py
+          mkdir -p tools
+          wget -O tools/cfst https://github.com/XIU2/CloudflareSpeedTest/releases/latest/download/cfst_linux_amd64.tar.gz
+          tar -xzf tools/cfst -C tools
+          chmod +x tools/cfst
+
+      - name: Run CloudflareSpeedTest
+        run: |
+          mkdir -p results
+          ./tools/cfst -dd -f cf_ipv4.txt -n 200 -o results/cfst_raw.txt
+
+      - name: Generate top20.txt with country info
+        run: |
+          python speedtest_parse_cfst.py
 
       - name: Commit and push results
-        if: success()  # 仅成功时提交
+        if: success()
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
