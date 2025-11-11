@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "0 8 * * *"  # 每天 08:00 UTC (北京时间16:00)
   workflow_dispatch:      # 可手动触发
+permissions:
+  contents: write   # 确保 GitHub Actions 具有推送权限
 
 jobs:
   speedtest:
