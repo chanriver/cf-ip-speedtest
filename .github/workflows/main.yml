@@ -4,12 +4,13 @@ on:
   schedule:
     - cron: "0 8 * * *"  # 每天 08:00 UTC (北京时间16:00)
   workflow_dispatch:      # 可手动触发
-permissions:
-  contents: write   # 确保 GitHub Actions 具有推送权限
 
 jobs:
   speedtest:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # 确保 Actions 具有推送权限
 
     steps:
       - name: Checkout repository
@@ -26,7 +27,8 @@ jobs:
 
       - name: Fetch Cloudflare IPv4 list
         run: |
-          python get_cloudflare_ips.py
+          # 下载 Cloudflare IPv4 列表并保存到文件
+          curl -o cf_ipv4.txt https://www.cloudflare.com/ips-v4
 
       - name: Download CloudflareSpeedTest Linux executable
         run: |
@@ -39,6 +41,10 @@ jobs:
         run: |
           mkdir -p results
           ./tools/cfst -dd -f cf_ipv4.txt -n 200 -o results/cfst_raw.txt
+
+      - name: Debug cfst output
+        run: |
+          cat results/cfst_raw.txt
 
       - name: Generate top20.txt with country info
         run: |
@@ -53,4 +59,3 @@ jobs:
           git add results/top20.txt
           git commit -m "Update top20.txt (auto speedtest)" || echo "No changes to commit"
           git push
-
