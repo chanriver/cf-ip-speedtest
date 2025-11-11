@@ -1,62 +1,68 @@
-import geoip2.database
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
+import re
+import geoip2.database
 
-DB_PATH = 'GeoLite2-Country.mmdb'
-RAW_FILE = 'results/cfst_raw.txt'
-OUTPUT_FILE = 'results/top20.txt'
-TOPN = 20
+# 配置路径
+CFST_RAW_FILE = "results/cfst_raw.txt"
+TOP20_FILE = "results/top20.txt"
+GEO_DB_FILE = "GeoLite2-Country.mmdb"
 
-def get_country_info(ip, reader):
-    try:
-        response = reader.country(ip)
-        country_name = response.country.names.get('zh-CN', '未知')
-        code = response.country.iso_code or 'UN'
-        flag = ''.join(chr(127397 + ord(c)) for c in code.upper()) if len(code) == 2 else '🏳️'
-        return f"{country_name}{flag}"
-    except Exception:
-        return "未知🏳️"
+# Emoji 国旗转换函数
+def country_code_to_emoji(code):
+    if not code or code == "--":
+        return "🏳️"
+    return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
-def main():
-    if not os.path.exists(DB_PATH):
-        print(f"❌ 未找到 GeoLite2 数据库: {DB_PATH}")
-        return
+# 读取 cfst 原始结果
+if not os.path.exists(CFST_RAW_FILE):
+    print(f"[Error] 文件不存在: {CFST_RAW_FILE}")
+    exit(1)
 
-    if not os.path.exists(RAW_FILE):
-        print(f"❌ 未找到 CloudflareSpeedTest 输出文件: {RAW_FILE}")
-        return
+with open(CFST_RAW_FILE, "r", encoding="utf-8", errors="ignore") as f:
+    lines = f.readlines()
 
-    reader = geoip2.database.Reader(DB_PATH)
+# 解析 IP 和延迟（只保留 IPv4 且测速成功的行）
+ip_speed_list = []
+pattern = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3}).*?(\d+(?:\.\d+)?)\s*ms")
 
-    lines = []
-    with open(RAW_FILE, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            # 假设输出格式: IP 延迟(ms) ...
-            parts = line.split()
-            ip = parts[0]
-            try:
-                delay = float(parts[1])
-            except:
-                continue
-            lines.append((ip, delay))
+for line in lines:
+    match = pattern.search(line)
+    if match:
+        ip = match.group(1)
+        speed = float(match.group(2))
+        ip_speed_list.append((ip, speed))
 
-    # 按延迟排序，取前20
-    top20 = sorted(lines, key=lambda x: x[1])[:TOPN]
+if not ip_speed_list:
+    print("[Warning] 没有解析到有效的 IPv4 测速数据")
+    open(TOP20_FILE, "w", encoding="utf-8").close()
+    exit(0)
 
-    out_lines = []
-    for ip, delay in top20:
-        country_info = get_country_info(ip, reader)
-        out_lines.append(f"{ip}#{country_info}#{delay:.1f}ms")
+# 按速度排序（升序，越快越好）
+ip_speed_list.sort(key=lambda x: x[1])
+top20 = ip_speed_list[:20]
 
-    reader.close()
+# 打开 GeoLite2 数据库
+if not os.path.exists(GEO_DB_FILE):
+    print(f"[Error] GeoLite2 数据库不存在: {GEO_DB_FILE}")
+    exit(1)
 
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(out_lines))
+reader = geoip2.database.Reader(GEO_DB_FILE)
 
-    print(f"🏁 top20.txt 已生成: {OUTPUT_FILE}")
+# 生成 top20.txt
+with open(TOP20_FILE, "w", encoding="utf-8") as f:
+    for ip, speed in top20:
+        try:
+            response = reader.country(ip)
+            country_cn = response.country.names.get("zh-CN", response.country.name or "--")
+            flag = country_code_to_emoji(response.country.iso_code)
+        except Exception:
+            country_cn = "--"
+            flag = "🏳️"
+        f.write(f"{ip}#{country_cn}{flag}\n")
 
-if __name__ == "__main__":
-    main()
+print(f"[Success] top20.txt 已生成，共 {len(top20)} 个 IP")
+
+reader.close()
